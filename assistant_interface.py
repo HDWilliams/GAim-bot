@@ -3,9 +3,18 @@ from openai import OpenAI
 import streamlit as st
 import logging
 
-def create_assistant(client: OpenAI, setup_prompt, model="gpt-4o"):
+def create_assistant(client: OpenAI, instructions, model="gpt-4o", tools=None):
     try:
-        assistant = client.beta.assistants.retrieve(assistant_id=st.secrets["ASSISTANT_ID"])
+        assistant = client.beta.assistants.create(model=model, instructions=instructions, tools=tools)
+        return assistant
+    except Exception as e:
+        logging.error(f"Error creating assistant: {e}")
+        st.error(f"Sorry it seems there was an error: {e}")
+        return None
+    
+def retrieve_assistant(client: OpenAI, assistant_retrieval_id=None):
+    try:
+        assistant = client.beta.assistants.retrieve(assistant_id=assistant_retrieval_id)
         return assistant
     except Exception as e:
         logging.error(f"Error creating assistant: {e}")
@@ -41,14 +50,6 @@ def attach_vector_store(client, assistant, vector_store_id):
         logging.error(f"Error attaching vector store: {e}")
         st.error(f"Sorry it seems there was an error: {e}")
         return None
-
-def create_assistant_and_store(client, setup_prompt, vector_store_id=None):
-  assistant = create_assistant(client, setup_prompt)
-  if vector_store_id is None:
-    vector_store = create_vector_store(client)
-    vector_store_id = vector_store.id
-  assistant = attach_vector_store(client, assistant, vector_store_id)
-  return assistant
 
 def create_thread(client):
   try:
