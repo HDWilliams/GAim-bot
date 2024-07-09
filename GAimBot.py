@@ -10,12 +10,14 @@ api_key = st.secrets["OPENAI_SECRET_KEY"]
 client = OpenAI(api_key=api_key)
 
 
-conversation_assistant = create_assistant(client, st.secrets["CONVERSATION_ASSISTANT_INSTRUCTIONS"])
+conversation_assistant = retrieve_assistant(client, st.secrets["ASSISTANT_ID"])
 conversation_thread = create_thread(client)  
 
-get_research = ResearchTool(client,
-    create_assistant(client, st.secrets["RESEARCH_ASSISTANT_INSTRUCTIONS"], model="gpt-3.5-turbo"),
-    create_thread(client))
+research_assistant = create_assistant(client, st.secrets["RESEARCH_ASSISTANT_INSTRUCTIONS"], model="gpt-3.5-turbo", tools=[{"type":"file_search"}])
+research_thread = create_thread(client)
+research_assistant = attach_vector_store(client, research_assistant, st.secrets["VECTOR_STORE"])
+
+get_research = ResearchTool(client,research_assistant, research_thread).retrieve_info
 
 
 st.title("GAim Bot")
@@ -30,8 +32,8 @@ if prompt := st.chat_input():
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
     user_message = add_message_to_thread(conversation_thread, prompt, client)
-
-    message = get_assitant_messages(client, conversation_thread, conversation_assistant)
+    print("Added messages to thread")
+    message = get_assitant_messages(client, conversation_thread, conversation_assistant, function=get_research)
 
 
     st.session_state.messages.append({"role": "assistant", "content": message})

@@ -17,7 +17,7 @@ def retrieve_assistant(client: OpenAI, assistant_retrieval_id=None):
         assistant = client.beta.assistants.retrieve(assistant_id=assistant_retrieval_id)
         return assistant
     except Exception as e:
-        logging.error(f"Error creating assistant: {e}")
+        logging.error(f"Error retrieving assistant: {e}")
         st.error(f"Sorry it seems there was an error: {e}")
         return None
 
@@ -56,7 +56,7 @@ def create_thread(client):
     thread = client.beta.threads.create()
     return thread
   except Exception as e:
-    logging.error(f"Error attaching vector store: {e}")
+    logging.error(f"Error creating thread: {e}")
     st.error(f"Sorry it seems there was an error: {e}. Please reload the page")
     return None
 
@@ -70,31 +70,63 @@ def add_message_to_thread(thread, content, client):
     )
     return message
   except Exception as e:
-    logging.error(f"Error attaching vector store: {e}")
+    logging.error(f"Error adding message to thread: {e}")
     st.error(f"Sorry it seems there was an error: {e}")
     return None
 
-
-def get_assitant_messages(client, thread, assistant):
+def get_assitant_messages(client, thread, assistant, function=None):
   try:
     run = client.beta.threads.runs.create_and_poll(
       thread_id=thread.id, assistant_id=assistant.id, 
     )
+    if run.status == "requires_action":
+      print(run.status)
 
-    messages = list(client.beta.threads.messages.list(thread_id=thread.id, run_id=run.id))
+      prev_user_message_content = client.beta.threads.messages.list(thread_id=thread.id).data[-1].content[0].text.value
+      print(prev_user_message_content)
 
-    message_content = messages[0].content[0].text
-    annotations = message_content.annotations
-    citations = []
-    for index, annotation in enumerate(annotations):
-        message_content.value = message_content.value.replace(annotation.text, f"[{index}]")
-        if file_citation := getattr(annotation, "file_citation", None):
-            cited_file = client.files.retrieve(file_citation.file_id)
-            citations.append(f"[{index}] {cited_file.filename}")
-    #print(message_content.value)
-    #print("\n".join(citations))
-    return message_content.value
+      tool_outputs = []
+      for tool in run.required_action.submit_tool_outputs.tool_calls:
+        if tool.function.name == "get_research":
+          tool_outputs.append({
+            "tool_call_id": tool.id,
+            "output": function(prev_user_message_content)
+          })
+          print(tool_outputs)
+      
+      if tool_outputs:
+        try:
+          run = client.beta.threads.runs.submit_tool_outputs_and_poll(
+            thread_id=thread.id,
+            run_id=run.id,
+            tool_outputs=tool_outputs
+          )
+          print("Tool outputs submitted successfully.")
+        except Exception as e:
+            print("Failed to submit tool outputs:", e)
+        else:
+          print("No tool outputs to submit.")
+    elif run.status == "failed":
+        print("failed")
+        raise Exception
+          
+    if run.status == "completed":
+      print("Run completed")
+      messages = list(client.beta.threads.messages.list(thread_id=thread.id, run_id=run.id))
+      message_content = messages[0].content[0].text
+      annotations = message_content.annotations
+      citations = []
+      for index, annotation in enumerate(annotations):
+          message_content.value = message_content.value.replace(annotation.text, f"[{index}]")
+          if file_citation := getattr(annotation, "file_citation", None):
+              cited_file = client.files.retrieve(file_citation.file_id)
+              citations.append(f"[{index}] {cited_file.filename}")
+    
+      return message_content.value
+      
+    
   except Exception as e:
-    logging.error(f"Error attaching vector store: {e}")
+    print(e)
+    logging.error(f"Error sending messages: {e}")
     st.error(f"Sorry it seems there was an error: {e}")
     return None
