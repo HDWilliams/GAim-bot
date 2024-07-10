@@ -28,11 +28,10 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
-if prompt := st.chat_input():
+if prompt := st.chat_input(max_chars=250):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
     user_message = add_message_to_thread(conversation_thread, prompt, client)
-    print("Added messages to thread")
     message = get_assitant_messages(client, conversation_thread, conversation_assistant, function=get_research)
 
 
