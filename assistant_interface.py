@@ -2,6 +2,7 @@ import os
 from openai import OpenAI 
 import streamlit as st
 import logging
+from ratelimit import limits
 
 def create_assistant(client: OpenAI, instructions, model="gpt-4o", tools=None):
     """returns new assistant created with specified model. default model is gpt-4o
@@ -83,7 +84,7 @@ def create_thread(client):
     st.error(f"Sorry it seems there was an error: {e}. Please reload the page")
     return None
 
-
+@limits(calls=20, period=60) #20 calls per minute
 def add_message_to_thread(thread, content, client):
   """
   returns: message object
@@ -102,7 +103,8 @@ def add_message_to_thread(thread, content, client):
     logging.error(f"Error adding message to thread: {e}")
     st.error(f"Sorry it seems there was an error: {e}")
     return None
-
+  
+@limits(calls=10, period=60) #10 calls per minute
 def get_assitant_messages(client, thread, assistant, function=None):
   """
   returns: str, message response from assistant. manages state of request 
