@@ -1,4 +1,5 @@
 # GAim Bot
+https://gaim-bot-wvsdxqktbk7tyyohyfozqq.streamlit.app/
 Pair of AI agents that use RAG for answering user questions about the game Eldin Ring. The underlying architecture works for any game, it just depends on the information provided to the research model. This works as an alternative to videogame guides or wikis as it can provide
 - custom responses based on quiery powered by gpt-4o
 - ability to synethesize information that would traditionally be contained across a number of wiki pages
