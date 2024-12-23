@@ -2,70 +2,51 @@ import os
 import streamlit as st
 from openai import OpenAI
 from assistant_interface import  create_thread, create_assistant, add_message_to_thread, get_assitant_messages, attach_vector_store, retrieve_assistant
-from retrieval_tool import ResearchTool
+from ResearchTool import ResearchTool
+from gpt_tools import tools
+from chat_interface import create_chat_interface
 
+#TO HAVE PERSISTENT SESSION MEMORY ALL OPENAI API OBJECTS MUST BE STORED IN SESSION 
 
 #CREATE CLIENT OBJECT
 api_key = st.secrets["OPENAI_SECRET_KEY"]
-client = OpenAI(api_key=api_key)
+
+if 'client' not in st.session_state:
+    client = OpenAI(api_key=api_key)
+    st.session_state.client = client
 
 #CREATE ASSISTANTS AND THREADS
-conversation_assistant = create_assistant(client, st.secrets["CONVERSATION_ASSISTANT_INSTRUCTIONS"], model="gpt-4o", tools=[
-    {
-      "type": "function",
-      "function": {
-        "name": "get_research",
-        "description": "call bot to research topic of user query",
-        "parameters": {
-            "type": "object",
-            "properties": {
-            "query": {
-                "type": "string",
-                "description": "specific query related to eldin ring game"
-            }
-            },
-            "required": [
-            "query"
-            ]
-            }
-        }
-    },
-    
-])
+if 'conversation_assistant' not in st.session_state:
+    conversation_assistant = create_assistant(
+        client, 
+        st.secrets["CONVERSATION_ASSISTANT_INSTRUCTIONS"], 
+        model=st.secrets["GPT_MODEL"], 
+        tools=tools)
+    st.session_state.conversation_assistant = conversation_assistant
 
-conversation_thread = create_thread(client)  
+if 'conversation_thread' not in st.session_state:
+    conversation_thread = create_thread(client)
+    st.session_state.conversation_thread = conversation_thread  
 
-research_assistant = create_assistant(client, st.secrets["RESEARCH_ASSISTANT_INSTRUCTIONS"], model="gpt-3.5-turbo", tools=[{"type":"file_search"}])
-research_thread = create_thread(client)
-research_assistant = attach_vector_store(client, research_assistant, st.secrets["VECTOR_STORE"])
+if "research_assistant" not in st.session_state:
+    research_assistant = create_assistant(st.session_state.client, st.secrets["RESEARCH_ASSISTANT_INSTRUCTIONS"], model=st.secrets["GPT_MODEL_RESEARCH"], tools=[{"type":"file_search"}])
+    st.session_state.research_assistant = research_assistant
+
+if "research_thread" not in st.session_state:
+    research_thread = create_thread(st.session_state.client)
+    st.session_state.research_thread = research_thread
+
+st.session_state.research_assistant = attach_vector_store(st.session_state.client, st.session_state.research_assistant, st.secrets["VECTOR_STORE"])
 
 #CREATE FUNCTION TO CALL RESEARCH GPT ASSISTANT
-get_research = ResearchTool(client,research_assistant, research_thread).retrieve_info
+get_research = ResearchTool(st.session_state.client ,st.session_state.research_assistant, st.session_state.research_thread).retrieve_info
 
-#CHAT INTERFACE
+#CHAT INTERFACE TO DISPLAY MESSAGES TO USER
 st.title("GAim Bot")
-if "disable_chat_input" not in st.session_state:
-    st.session_state["disable_chat_input"] = False
-
-if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", "content": st.secrets["CONVERSATION_STARTER"]}]
-
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
-
-if prompt := st.chat_input(max_chars=250, disabled=st.session_state["disable_chat_input"]):
-    #DISABLE USER INPUT WHILE WAITING FOR MESSAGE
-    if not st.session_state["disable_chat_input"]:
-
-        #ADD USER MESSAGE TO MESSAGE LIST
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        st.chat_message("user").write(prompt)
-
-        #GET GPT RESPONSE AND 
-        user_message = add_message_to_thread(conversation_thread, prompt, client)
-        message = get_assitant_messages(client, conversation_thread, conversation_assistant, function=get_research)
-
-        st.session_state.messages.append({"role": "assistant", "content": message})
-        st.chat_message("assistant").write(message)
-    st.session_state["disable_chat_input"] = False
+create_chat_interface(
+    st.session_state.client, 
+    st.session_state.conversation_thread, 
+    st.session_state.conversation_assistant, 
+    get_research)
+  
 
